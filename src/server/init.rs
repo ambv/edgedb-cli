@@ -60,14 +60,6 @@ fn _read_ports(path: &Path) -> anyhow::Result<BTreeMap<String, u16>> {
     Ok(serde_json::from_str(&data)?)
 }
 
-
-fn read_ports() -> anyhow::Result<BTreeMap<String, u16>> {
-    let path = config_dir()?.join("instance_ports.json");
-    _read_ports(&path).with_context(|| {
-        format!("failed reading port mapping {}", path.display())
-    })
-}
-
 fn next_min_port(port_map: &BTreeMap<String, u16>) -> u16 {
     if port_map.len() == 0 {
         return MIN_PORT;
@@ -83,8 +75,23 @@ fn next_min_port(port_map: &BTreeMap<String, u16>) -> u16 {
     return prev+1;
 }
 
+fn _write_ports(port_map: &BTreeMap<String, u16>, port_file: &Path)
+    -> anyhow::Result<()>
+{
+    let config_dir = config_dir()?;
+    fs::create_dir_all(&config_dir)?;
+    let tmp_file = config_dir.join(".instance_ports.json.tmp");
+    fs::remove_file(&tmp_file).ok();
+    serde_json::to_writer_pretty(fs::File::create(&tmp_file)?, &port_map)?;
+    fs::rename(&tmp_file, &port_file)?;
+    Ok(())
+}
+
 fn allocate_port(name: &str) -> anyhow::Result<u16> {
-    let mut port_map = read_ports()?;
+    let port_file = config_dir()?.join("instance_ports.json");
+    let mut port_map = _read_ports(&port_file).with_context(|| {
+        format!("failed reading port mapping {}", port_file.display())
+    })?;
     if let Some(port) = port_map.get(name) {
         return Ok(*port);
     }
@@ -93,10 +100,9 @@ fn allocate_port(name: &str) -> anyhow::Result<u16> {
     }
     let port = next_min_port(&port_map);
     port_map.insert(name.to_string(), port);
-    let tmp_file = config_dir()?.join(".instance_ports.json.tmp");
-    fs::remove_file(&tmp_file).ok();
-    serde_json::to_writer_pretty(fs::File::create(&tmp_file)?, &port_map)?;
-    fs::rename(&tmp_file, config_dir()?.join("instance_ports.json"))?;
+    _write_ports(&port_map, &port_file).with_context(|| {
+        format!("failed writing port mapping {}", port_file.display())
+    })?;
     Ok(port)
 }
 
