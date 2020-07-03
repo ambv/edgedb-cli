@@ -52,7 +52,7 @@ fn dump_restore_all() {
 
     let new_instance = ServerGuard::start();
     println!("new instance started");
-    new_instance.admin_cmd().arg("restore").arg("./tmp/dump_02")
+    new_instance.admin_cmd().arg("restore").arg("--all").arg("./tmp/dump_02")
         .assert().success();
     println!("restored");
 
