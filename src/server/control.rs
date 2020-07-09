@@ -71,7 +71,7 @@ pub fn get_instance_from_metadata(name: &str,
         InstallMethod::Package if cfg!(target_os="linux") => {
             Ok(Box::new(SystemdInstance {
                 name: name.to_owned(),
-                system: false,
+                system,
                 version: metadata.version.to_owned(),
                 port: metadata.port,
             }))
@@ -80,7 +80,7 @@ pub fn get_instance_from_metadata(name: &str,
             let unit_name = format!("com.edgedb.edgedb-server-{}.plist", name);
             Ok(Box::new(LaunchdInstance {
                 name: name.to_owned(),
-                system: false,
+                system,
                 version: metadata.version.to_owned(),
                 unit_path: home_dir()?.join("Library/LaunchAgents")
                     .join(&unit_name),
