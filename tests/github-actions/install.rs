@@ -135,9 +135,9 @@ fn github_action_install() -> anyhow::Result<()> {
                 .assert()
                 .success();
 
-            println!("Start");
             Command::new(&edgedb)
-                .arg("server").arg("start")
+                .arg("--instance").arg("default")
+                .arg("query").arg("SELECT 1")
                 .assert()
                 .success();
 

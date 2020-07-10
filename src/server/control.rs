@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::process::{Command, exit};
 
 use anyhow::Context;
@@ -17,6 +17,7 @@ pub trait Instance {
     fn stop(&mut self, options: &Stop) -> anyhow::Result<()>;
     fn restart(&mut self, options: &Restart) -> anyhow::Result<()>;
     fn status(&mut self, options: &Status) -> anyhow::Result<()>;
+    fn get_socket(&self, admin: bool) -> anyhow::Result<PathBuf>;
 }
 
 pub struct SystemdInstance {
@@ -25,6 +26,7 @@ pub struct SystemdInstance {
     system: bool,
     #[allow(dead_code)]
     version: Version<String>,
+    port: u16,
 }
 
 pub struct LaunchdInstance {
@@ -35,6 +37,7 @@ pub struct LaunchdInstance {
     #[allow(dead_code)]
     version: Version<String>,
     unit_path: PathBuf,
+    port: u16,
 }
 
 pub fn get_instance(name: &str) -> anyhow::Result<Box<dyn Instance>> {
@@ -60,6 +63,7 @@ pub fn get_instance(name: &str) -> anyhow::Result<Box<dyn Instance>> {
                 name: name.to_owned(),
                 system: false,
                 version: metadata.version.to_owned(),
+                port: metadata.port,
             }))
         }
         InstallMethod::Package if cfg!(target_os="macos") => {
@@ -70,6 +74,7 @@ pub fn get_instance(name: &str) -> anyhow::Result<Box<dyn Instance>> {
                 version: metadata.version.to_owned(),
                 unit_path: home_dir()?.join("Library/LaunchAgents")
                     .join(&unit_name),
+                port: metadata.port,
             }))
         }
         _ => {
@@ -106,6 +111,16 @@ impl Instance for SystemdInstance {
             .arg("status")
             .arg(format!("edgedb-server@{}", self.name)))?;
         Ok(())
+    }
+    fn get_socket(&self, admin: bool) -> anyhow::Result<PathBuf> {
+        Ok(dirs::runtime_dir()
+            .unwrap_or_else(|| {
+                Path::new("/run/user").join(get_current_uid().to_string())
+            })
+            .join(format!("edgedb-{}", self.name))
+            .join(format!(".s.EDGEDB{}.{}",
+                if admin { ".admin" } else { "" },
+                self.port)))
     }
 }
 
@@ -154,5 +169,13 @@ impl Instance for LaunchdInstance {
         }
         eprintln!("Server is not running");
         exit(3);
+    }
+    fn get_socket(&self, admin: bool) -> anyhow::Result<PathBuf> {
+        Ok(home_dir()?
+            .join(".edgedb/run")
+            .join(&self.name)
+            .join(format!(".s.EDGEDB{}.{}",
+                if admin { ".admin" } else { "" },
+                self.port)))
     }
 }
